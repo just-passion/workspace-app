@@ -72,5 +72,6 @@ WorkspaceMember.belongsTo(Workspace, { foreignKey: 'workspaceId', as: 'workspace
 Project.belongsTo(Workspace, { foreignKey: 'workspaceId' });
 Project.hasMany(ProjectMember, { foreignKey: 'projectId', as: 'members' });
 ProjectMember.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+ActivityLog.belongsTo(User, { foreignKey: 'userId', as: 'actor' });
 
 module.exports = { User, Workspace, WorkspaceMember, Project, ProjectMember, Notification, ActivityLog };

@@ -36,6 +36,7 @@ const channelSchema = new mongoose.Schema({
 const chatMessageSchema = new mongoose.Schema({
   channelId: { type: String, required: true, index: true },
   senderId: { type: String, required: true },
+  senderName: { type: String, default: '' },
   message: { type: String, required: true },
   mentions: [{ type: String }],
   attachments: [{ name: String, url: String }],
