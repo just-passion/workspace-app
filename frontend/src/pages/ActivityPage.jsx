@@ -71,7 +71,7 @@ export default function ActivityPage() {
                 {/* Timeline line */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <div className="avatar" style={{ width: '36px', height: '36px', fontSize: '13px', background: av.bg, border: `2px solid ${av.border}`, color: av.color, flexShrink: 0 }}>
-                    {a.userId?.[0]?.toUpperCase() || '?'}
+                    {(a.actor?.name || a.userId)?.[0]?.toUpperCase() || '?'}
                   </div>
                   {!isLast && (
                     <div style={{ width: '2px', flex: 1, background: 'var(--border)', marginTop: '6px', minHeight: '20px' }} />
@@ -83,7 +83,7 @@ export default function ActivityPage() {
                   <div className="card" style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ fontSize: '13px', color: 'var(--text-1)', lineHeight: 1.5 }}>
-                        <span style={{ fontWeight: 700 }}>{a.userId}</span>
+                        <span style={{ fontWeight: 700 }}>{a.actor?.name || a.userId}</span>
                         <span style={{ color: 'var(--text-3)' }}> {ev.verb} </span>
                         {(meta.title || meta.taskId) && (
                           <span style={{ color: ev.color, fontWeight: 600 }}>{meta.title || meta.taskId}</span>

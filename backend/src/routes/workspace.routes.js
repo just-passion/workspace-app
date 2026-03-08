@@ -76,14 +76,40 @@ router.get('/:id/activity', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/workspaces/:id/invite
+// POST /api/workspaces/:id/invite  (supports email or userId)
 router.post('/:id/invite', async (req, res, next) => {
   try {
-    const { userId, role = 'member' } = req.body;
-    const existing = await WorkspaceMember.findOne({ where: { workspaceId: req.params.id, userId } });
+    const { userId, email, role = 'member' } = req.body;
+    let resolvedUserId = userId;
+
+    // If email provided, look up the user
+    if (!resolvedUserId && email) {
+      const found = await User.findOne({ where: { email } });
+      if (!found) return res.status(404).json({ error: 'No user found with that email address' });
+      resolvedUserId = found.id;
+    }
+
+    if (!resolvedUserId) return res.status(400).json({ error: 'userId or email is required' });
+
+    const existing = await WorkspaceMember.findOne({ where: { workspaceId: req.params.id, userId: resolvedUserId } });
     if (existing) return res.status(409).json({ error: 'User is already a member' });
-    const member = await WorkspaceMember.create({ workspaceId: req.params.id, userId, role });
+    const member = await WorkspaceMember.create({ workspaceId: req.params.id, userId: resolvedUserId, role });
     res.status(201).json({ member });
+  } catch (err) { next(err); }
+});
+
+// GET /api/workspaces/:id/activity  — with user names resolved
+router.get('/:id/activity-named', async (req, res, next) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+    const activity = await ActivityLog.findAll({
+      where: { workspaceId: req.params.id },
+      order: [['createdAt', 'DESC']],
+      limit: Number(limit),
+      offset: Number(offset),
+      include: [{ model: User, as: 'actor', attributes: ['id', 'name', 'email'] }],
+    });
+    res.json({ activity });
   } catch (err) { next(err); }
 });
 

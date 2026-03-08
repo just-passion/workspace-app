@@ -1,6 +1,6 @@
 const projectRouter = require('express').Router();
 const { authenticate } = require('../middleware/auth');
-const { Project, ProjectMember, User, WorkspaceMember, Workspace } = require('../models/postgres/index');
+const { Project, ProjectMember, User, WorkspaceMember, Workspace, ActivityLog } = require('../models/postgres/index');
 const { getProjectTasks } = require('../controllers/task.controller');
 const { Task: MongoTask } = require('../models/mongo/index');
 
@@ -54,6 +54,15 @@ projectRouter.post('/', async (req, res, next) => {
 
     const project = await Project.create({ workspaceId, name: name.trim(), description, createdBy: req.user.id });
     await ProjectMember.create({ projectId: project.id, userId: req.user.id, role: 'owner' });
+
+    // Log activity
+    try {
+      await ActivityLog.create({
+        workspaceId, userId: req.user.id, eventType: 'project_created',
+        metadata: { projectId: project.id, title: project.name, workspaceId },
+      });
+    } catch (_) {}
+
     res.status(201).json({ project });
   } catch (err) { next(err); }
 });
@@ -99,10 +108,37 @@ projectRouter.get('/:id/members', async (req, res, next) => {
 
 projectRouter.post('/:id/members', async (req, res, next) => {
   try {
-    const { userId, role = 'member' } = req.body;
-    const existing = await ProjectMember.findOne({ where: { projectId: req.params.id, userId } });
+    const { userId, email, role = 'member' } = req.body;
+    let resolvedUserId = userId;
+
+    // Support email-based invite
+    if (!resolvedUserId && email) {
+      const found = await User.findOne({ where: { email } });
+      if (!found) return res.status(404).json({ error: 'No user found with that email address' });
+      resolvedUserId = found.id;
+    }
+
+    if (!resolvedUserId) return res.status(400).json({ error: 'userId or email is required' });
+
+    const existing = await ProjectMember.findOne({ where: { projectId: req.params.id, userId: resolvedUserId } });
     if (existing) return res.status(409).json({ error: 'User already a member' });
-    const member = await ProjectMember.create({ projectId: req.params.id, userId, role });
+    const member = await ProjectMember.create({ projectId: req.params.id, userId: resolvedUserId, role });
+
+    // Also add to workspace if not already there
+    const project = await Project.findByPk(req.params.id);
+    if (project) {
+      const wsMember = await WorkspaceMember.findOne({ where: { workspaceId: project.workspaceId, userId: resolvedUserId } });
+      if (!wsMember) await WorkspaceMember.create({ workspaceId: project.workspaceId, userId: resolvedUserId, role: 'member' });
+
+      // Log activity
+      try {
+        await ActivityLog.create({
+          workspaceId: project.workspaceId, userId: resolvedUserId, eventType: 'member_joined',
+          metadata: { projectId: project.id, title: project.name, workspaceId: project.workspaceId },
+        });
+      } catch (_) {}
+    }
+
     res.status(201).json({ member });
   } catch (err) { next(err); }
 });

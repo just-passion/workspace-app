@@ -56,7 +56,7 @@ export default function WorkspacePage() {
 
   const { data: activityData } = useQuery({
     queryKey: ['workspace-activity', workspaceId],
-    queryFn: () => api.get(`/workspaces/${workspaceId}/activity`).then(r => r.data),
+    queryFn: () => api.get(`/activity/${workspaceId}`).then(r => r.data),
     enabled: !!workspaceId,
     refetchInterval: 15000,
   });
@@ -158,13 +158,14 @@ export default function WorkspacePage() {
               <p style={{ fontSize: '12px', color: 'var(--text-3)' }}>No activity yet</p>
             ) : activity.slice(0, 6).map((a, i) => {
               const av = AVATAR_COLORS[i % AVATAR_COLORS.length];
+              const actorName = a.actor?.name || a.userId || '?';
               return (
                 <div key={i} className="activity-item">
                   <div className="avatar avatar-sm" style={{ background: av.bg, border: `1.5px solid ${av.border}`, color: av.color }}>
-                    {a.userId?.[0]?.toUpperCase() || '?'}
+                    {actorName[0]?.toUpperCase()}
                   </div>
                   <div>
-                    <div className="activity-text" style={{ fontWeight: 500 }}>{a.eventType?.replace(/_/g, ' ')}</div>
+                    <div className="activity-text" style={{ fontWeight: 500 }}><b>{actorName}</b> {a.eventType?.replace(/_/g, ' ')}</div>
                     <div className="activity-time">{timeAgo(a.createdAt)}</div>
                   </div>
                 </div>
