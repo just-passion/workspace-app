@@ -14,9 +14,15 @@ export default function RegisterPage() {
     if (form.password !== form.confirm) return toast.error('Passwords do not match');
     setLoading(true);
     try {
-      await register(form.name, form.email, form.password);
+      const data = await register(form.name, form.email, form.password);
       toast.success('Account created!');
-      navigate('/workspace');
+      // If backend returned a workspaceId, go straight to dashboard
+      // Otherwise send user to create-workspace flow
+      if (data.workspaceId) {
+        navigate('/workspace');
+      } else {
+        navigate('/create-workspace');
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Registration failed');
     } finally {

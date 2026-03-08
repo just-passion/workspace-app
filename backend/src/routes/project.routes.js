@@ -1,22 +1,58 @@
 const projectRouter = require('express').Router();
 const { authenticate } = require('../middleware/auth');
-const { Project, ProjectMember, User } = require('../models/postgres/index');
+const { Project, ProjectMember, User, WorkspaceMember, Workspace } = require('../models/postgres/index');
 const { getProjectTasks } = require('../controllers/task.controller');
 const { Task: MongoTask } = require('../models/mongo/index');
 
 projectRouter.use(authenticate);
 
+// Helper: resolve workspaceId for a user — tries membership first, then ownership
+async function resolveWorkspaceId(userId) {
+  const membership = await WorkspaceMember.findOne({ where: { userId } });
+  if (membership) return membership.workspaceId;
+  const owned = await Workspace.findOne({ where: { ownerId: userId } });
+  if (owned) return owned.id;
+  return null;
+}
+
 projectRouter.get('/', async (req, res, next) => {
   try {
-    const projects = await Project.findAll({ include: [{ model: ProjectMember, as: 'members' }] });
+    const { workspaceId } = req.query;
+    let projects;
+    if (workspaceId) {
+      projects = await Project.findAll({
+        where: { workspaceId },
+        include: [{ model: ProjectMember, as: 'members' }],
+      });
+    } else {
+      const memberships = await ProjectMember.findAll({ where: { userId: req.user.id } });
+      const projectIds = memberships.map(m => m.projectId);
+      projects = await Project.findAll({
+        where: { id: projectIds },
+        include: [{ model: ProjectMember, as: 'members' }],
+      });
+    }
     res.json({ projects });
   } catch (err) { next(err); }
 });
 
 projectRouter.post('/', async (req, res, next) => {
   try {
-    const { workspaceId, name, description } = req.body;
-    const project = await Project.create({ workspaceId, name, description, createdBy: req.user.id });
+    let { workspaceId, name, description } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Project name is required.' });
+    }
+
+    // Auto-resolve workspaceId if not provided or null
+    if (!workspaceId) {
+      workspaceId = await resolveWorkspaceId(req.user.id);
+      if (!workspaceId) {
+        return res.status(400).json({ error: 'No workspace found. Please create a workspace first.' });
+      }
+    }
+
+    const project = await Project.create({ workspaceId, name: name.trim(), description, createdBy: req.user.id });
     await ProjectMember.create({ projectId: project.id, userId: req.user.id, role: 'owner' });
     res.status(201).json({ project });
   } catch (err) { next(err); }
@@ -32,7 +68,6 @@ projectRouter.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PUT /api/projects/:id — update project
 projectRouter.put('/:id', async (req, res, next) => {
   try {
     const { name, description, status } = req.body;
@@ -43,7 +78,6 @@ projectRouter.put('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// DELETE /api/projects/:id
 projectRouter.delete('/:id', async (req, res, next) => {
   try {
     const project = await Project.findByPk(req.params.id);
@@ -53,7 +87,6 @@ projectRouter.delete('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/projects/:id/members
 projectRouter.get('/:id/members', async (req, res, next) => {
   try {
     const members = await ProjectMember.findAll({
@@ -64,7 +97,6 @@ projectRouter.get('/:id/members', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/projects/:id/members — invite user to project
 projectRouter.post('/:id/members', async (req, res, next) => {
   try {
     const { userId, role = 'member' } = req.body;
@@ -75,7 +107,6 @@ projectRouter.post('/:id/members', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// DELETE /api/projects/:id/members/:userId
 projectRouter.delete('/:id/members/:userId', async (req, res, next) => {
   try {
     await ProjectMember.destroy({ where: { projectId: req.params.id, userId: req.params.userId } });
@@ -83,7 +114,6 @@ projectRouter.delete('/:id/members/:userId', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/projects/:id/stats — task progress breakdown
 projectRouter.get('/:id/stats', async (req, res, next) => {
   try {
     const projectId = req.params.id;

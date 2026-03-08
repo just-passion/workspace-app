@@ -13,9 +13,14 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(form.email, form.password);
+      const data = await login(form.email, form.password);
       toast.success('Welcome back!');
-      navigate('/workspace');
+      // If user has no workspace yet, send them to create one
+      if (data.workspaceId) {
+        navigate('/workspace');
+      } else {
+        navigate('/create-workspace');
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Login failed');
     } finally {

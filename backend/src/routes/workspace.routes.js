@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { authenticate } = require('../middleware/auth');
-const { Workspace, WorkspaceMember, Project, ActivityLog, User, Task } = require('../models/postgres/index');
+const { Workspace, WorkspaceMember, Project, ActivityLog, User } = require('../models/postgres/index');
 const { Task: MongoTask } = require('../models/mongo/index');
 
 router.use(authenticate);
@@ -9,7 +9,9 @@ router.use(authenticate);
 router.post('/', async (req, res, next) => {
   try {
     const { name, description } = req.body;
-    const workspace = await Workspace.create({ name, description, ownerId: req.user.id });
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Workspace name is required' });
+
+    const workspace = await Workspace.create({ name: name.trim(), description, ownerId: req.user.id });
     await WorkspaceMember.create({ workspaceId: workspace.id, userId: req.user.id, role: 'owner' });
     res.status(201).json({ workspace });
   } catch (err) { next(err); }
@@ -34,7 +36,7 @@ router.get('/:id/projects', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/workspaces/:id/members  — NEW
+// GET /api/workspaces/:id/members
 router.get('/:id/members', async (req, res, next) => {
   try {
     const members = await WorkspaceMember.findAll({
@@ -45,22 +47,19 @@ router.get('/:id/members', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/workspaces/:id/stats  — NEW: task-based dashboard stats
+// GET /api/workspaces/:id/stats
 router.get('/:id/stats', async (req, res, next) => {
   try {
     const projects = await Project.findAll({ where: { workspaceId: req.params.id } });
     const projectIds = projects.map(p => p.id);
-
     const memberCount = await WorkspaceMember.count({ where: { workspaceId: req.params.id } });
 
-    // Aggregate task stats across all projects in this workspace using MongoDB
     let totalTasks = 0, inProgress = 0, completed = 0;
     if (projectIds.length > 0) {
-      totalTasks  = await MongoTask.countDocuments({ projectId: { $in: projectIds } });
-      inProgress  = await MongoTask.countDocuments({ projectId: { $in: projectIds }, status: 'in_progress' });
-      completed   = await MongoTask.countDocuments({ projectId: { $in: projectIds }, status: 'done' });
+      totalTasks = await MongoTask.countDocuments({ projectId: { $in: projectIds } });
+      inProgress = await MongoTask.countDocuments({ projectId: { $in: projectIds }, status: 'in_progress' });
+      completed  = await MongoTask.countDocuments({ projectId: { $in: projectIds }, status: 'done' });
     }
-
     res.json({ totalTasks, inProgress, completed, memberCount });
   } catch (err) { next(err); }
 });
@@ -81,7 +80,6 @@ router.get('/:id/activity', async (req, res, next) => {
 router.post('/:id/invite', async (req, res, next) => {
   try {
     const { userId, role = 'member' } = req.body;
-    // Check already a member
     const existing = await WorkspaceMember.findOne({ where: { workspaceId: req.params.id, userId } });
     if (existing) return res.status(409).json({ error: 'User is already a member' });
     const member = await WorkspaceMember.create({ workspaceId: req.params.id, userId, role });
