@@ -6,11 +6,11 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 
 const NAV = [
-  { to: '/workspace',      icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/projects',       icon: FolderKanban,    label: 'Projects' },
-  { to: '/chat',           icon: MessageSquare,   label: 'Chat' },
-  { to: '/notifications',  icon: Bell,            label: 'Notifications' },
-  { to: '/activity',       icon: Activity,        label: 'Activity' },
+  { to: '/workspace',     icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/projects',      icon: FolderKanban,    label: 'Projects' },
+  { to: '/chat',          icon: MessageSquare,   label: 'Chat' },
+  { to: '/notifications', icon: Bell,            label: 'Notifications' },
+  { to: '/activity',      icon: Activity,        label: 'Activity' },
 ];
 
 export default function AppLayout() {
@@ -25,16 +25,11 @@ export default function AppLayout() {
   });
   const unreadCount = notifData?.notifications?.filter(n => !n.isRead).length || 0;
 
-  function handleLogout() {
-    logout();
-    navigate('/login');
-  }
+  function handleLogout() { logout(); navigate('/login'); }
 
   return (
     <div className="app-layout">
-      {/* Sidebar */}
       <aside className="sidebar">
-        {/* Logo */}
         <div className="sidebar-logo">⚡</div>
 
         {NAV.map(({ to, icon: Icon, label }) => (
@@ -47,22 +42,20 @@ export default function AppLayout() {
           </NavLink>
         ))}
 
-        {/* Bottom controls */}
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-          <button onClick={handleLogout} title="Logout"
-            className="nav-link"
-            style={{ color: 'var(--text-3)' }}
+          <button onClick={handleLogout} title="Logout" className="nav-link"
+            style={{ border: 'none', cursor: 'pointer', color: 'var(--text-3)' }}
             onMouseEnter={e => { e.currentTarget.style.color = 'var(--red)'; e.currentTarget.style.background = 'var(--red-dim)'; }}
             onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.background = ''; }}>
             <LogOut size={16} />
           </button>
-          <div className="avatar" style={{ width: '30px', height: '30px', fontSize: '12px' }}>
+          <div className="avatar" style={{ width: '30px', height: '30px', fontSize: '12px', cursor: 'pointer' }}
+            title={user?.name} onClick={() => navigate('/workspace')}>
             {user?.name?.[0]?.toUpperCase()}
           </div>
         </div>
       </aside>
 
-      {/* Page Content */}
       <main style={{ flex: 1, overflow: 'hidden' }}>
         <Outlet />
       </main>

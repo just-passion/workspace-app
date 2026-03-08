@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { authenticate } = require('../middleware/auth');
-const { Workspace, WorkspaceMember, Project, ActivityLog } = require('../models/postgres/index');
+const { Workspace, WorkspaceMember, Project, ActivityLog, User, Task } = require('../models/postgres/index');
+const { Task: MongoTask } = require('../models/mongo/index');
 
 router.use(authenticate);
 
@@ -33,6 +34,37 @@ router.get('/:id/projects', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/workspaces/:id/members  — NEW
+router.get('/:id/members', async (req, res, next) => {
+  try {
+    const members = await WorkspaceMember.findAll({
+      where: { workspaceId: req.params.id },
+      include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email', 'avatar'] }],
+    });
+    res.json({ members });
+  } catch (err) { next(err); }
+});
+
+// GET /api/workspaces/:id/stats  — NEW: task-based dashboard stats
+router.get('/:id/stats', async (req, res, next) => {
+  try {
+    const projects = await Project.findAll({ where: { workspaceId: req.params.id } });
+    const projectIds = projects.map(p => p.id);
+
+    const memberCount = await WorkspaceMember.count({ where: { workspaceId: req.params.id } });
+
+    // Aggregate task stats across all projects in this workspace using MongoDB
+    let totalTasks = 0, inProgress = 0, completed = 0;
+    if (projectIds.length > 0) {
+      totalTasks  = await MongoTask.countDocuments({ projectId: { $in: projectIds } });
+      inProgress  = await MongoTask.countDocuments({ projectId: { $in: projectIds }, status: 'in_progress' });
+      completed   = await MongoTask.countDocuments({ projectId: { $in: projectIds }, status: 'done' });
+    }
+
+    res.json({ totalTasks, inProgress, completed, memberCount });
+  } catch (err) { next(err); }
+});
+
 // GET /api/workspaces/:id/activity
 router.get('/:id/activity', async (req, res, next) => {
   try {
@@ -49,6 +81,9 @@ router.get('/:id/activity', async (req, res, next) => {
 router.post('/:id/invite', async (req, res, next) => {
   try {
     const { userId, role = 'member' } = req.body;
+    // Check already a member
+    const existing = await WorkspaceMember.findOne({ where: { workspaceId: req.params.id, userId } });
+    if (existing) return res.status(409).json({ error: 'User is already a member' });
     const member = await WorkspaceMember.create({ workspaceId: req.params.id, userId, role });
     res.status(201).json({ member });
   } catch (err) { next(err); }
